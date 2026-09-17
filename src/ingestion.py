@@ -11,7 +11,9 @@ def ingest_files(files, forced_brand: str|None=None) -> dict:
     result={'files_processed':0,'new_records':0,'duplicates':0,'rejected':0,'errors':[],'warnings':[]}
     by_brand={}
     for file in files:
-        name=getattr(file,'name',Path(file).name)
+        name = getattr(file, "name", None)
+if not name:
+    name = Path(str(file)).name
         try:
             raw=read_csv(file)
             validation=validate_raw(raw)
