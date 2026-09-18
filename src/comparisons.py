@@ -1,23 +1,8 @@
-from __future__ import annotations
-import numpy as np
 import pandas as pd
-
-
-def pct_change(current, previous):
-    if pd.isna(current) or pd.isna(previous) or previous == 0: return np.nan
-    return (current - previous) / abs(previous) * 100
-
-
-def compare_kpis(current: dict, previous: dict) -> pd.DataFrame:
-    rows=[]
-    for key, value in current.items():
-        prev = previous.get(key, np.nan)
-        rows.append({'kpi':key,'current':value,'previous':prev,'absolute_change':value-prev if pd.notna(value) and pd.notna(prev) else np.nan,'percent_change':pct_change(value,prev)})
+def period_comparison(df,start,end):
+    if df.empty:return pd.DataFrame()
+    s=pd.Timestamp(start);e=pd.Timestamp(end);days=(e-s).days+1;d=pd.to_datetime(df.date,errors='coerce')
+    cur=df[(d>=s)&(d<=e)];pe=s-pd.Timedelta(days=1);ps=pe-pd.Timedelta(days=days-1);prev=df[(d>=ps)&(d<=pe)];rows=[]
+    for m in ['reach','interactions','video_views']:
+        a=cur[m].sum(min_count=1);b=prev[m].sum(min_count=1);delta=a-b if pd.notna(a) and pd.notna(b) else pd.NA;pct=delta/b*100 if pd.notna(delta) and b!=0 else pd.NA;rows.append({'Métrica':m,'Actual':a,'Anterior':b,'Variación':delta,'%':pct})
     return pd.DataFrame(rows)
-
-
-def equivalent_previous_period(start: pd.Timestamp, end: pd.Timestamp) -> tuple[pd.Timestamp,pd.Timestamp]:
-    days = (end - start).days + 1
-    prev_end = start - pd.Timedelta(days=1)
-    prev_start = prev_end - pd.Timedelta(days=days-1)
-    return prev_start, prev_end

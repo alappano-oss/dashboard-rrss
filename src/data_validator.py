@@ -1,42 +1,22 @@
-from __future__ import annotations
-from dataclasses import dataclass, field
-import pandas as pd
-from config.config import REQUIRED_ANY, COLUMN_ALIASES
-
+from dataclasses import dataclass,field
+import re,pandas as pd
+from config.config import ALIASES
 @dataclass
 class ValidationResult:
-    valid: bool
-    errors: list[str] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
-
-
-def _norm(s: str) -> str:
-    return ''.join(ch for ch in str(s).strip().lower().replace('á','a').replace('é','e').replace('í','i').replace('ó','o').replace('ú','u').replace('ñ','n') if ch.isalnum() or ch == '_')
-
-
-def resolve_columns(columns) -> dict[str,str]:
-    normalized = {_norm(c): c for c in columns}
-    mapping = {}
-    for canonical, aliases in COLUMN_ALIASES.items():
-        for alias in aliases:
-            key = _norm(alias)
-            if key in normalized:
-                mapping[canonical] = normalized[key]
-                break
-    return mapping
-
-
-def validate_raw(df: pd.DataFrame) -> ValidationResult:
-    errors, warnings = [], []
-    mapping = resolve_columns(df.columns)
-    for required, aliases in REQUIRED_ANY.items():
-        if required not in mapping:
-            errors.append(f'Falta una columna de {required}: se esperaba alguna de {aliases}.')
-    if df.empty:
-        errors.append('El archivo no contiene registros.')
-    if 'date' in mapping:
-        parsed = pd.to_datetime(df[mapping['date']], errors='coerce', dayfirst=True)
-        bad = int(parsed.isna().sum())
-        if bad: warnings.append(f'{bad} registros tienen una fecha no interpretable.')
-    if df.duplicated().sum(): warnings.append(f'Se detectaron {int(df.duplicated().sum())} filas idénticas.')
-    return ValidationResult(not errors, errors, warnings)
+    valid:bool; errors:list[str]=field(default_factory=list); warnings:list[str]=field(default_factory=list)
+def norm(v):return re.sub(r'[^a-z0-9]+','',str(v).strip().lower().translate(str.maketrans('áéíóúüñ','aeiouun')))
+def resolve_columns(columns):
+    normalized={norm(c):c for c in columns}; m={}
+    for k,aliases in ALIASES.items():
+        for a in aliases:
+            if norm(a) in normalized:m[k]=normalized[norm(a)];break
+    return m
+def validate_raw(df):
+    errors=[];warnings=[]
+    if df.empty:return ValidationResult(False,['El archivo no contiene registros.'],[])
+    m=resolve_columns(df.columns)
+    if 'post_id' not in m and 'url' not in m:errors.append('No se encontró identificador de publicación ni enlace permanente.')
+    if 'published_datetime' not in m:errors.append("No se encontró 'Hora de publicación', necesaria para determinar la fecha.")
+    if 'reach' not in m:warnings.append('No se encontró Alcance.')
+    if 'interactions' not in m and not any(k in m for k in ('likes','comments','shares','saves')):warnings.append('No se encontraron métricas de interacción.')
+    return ValidationResult(not errors,errors,warnings)
